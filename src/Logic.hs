@@ -149,14 +149,6 @@ fail = Branch (\s -> (s, false, [Leaf]))
 succeed :: Tree Int Constraint
 succeed = Branch (\s -> (s, true, [Leaf]))
 
--- Hemos probado muchas formas de meter pereza para conseguir un profile
--- plano y no lo conseguimos.
---
--- Lo que creemos es que simplemente el arbol es muy profundo, por eso
--- require evaluar y generar tantos constructores incluso para un caso
--- en el que siempre se está yendo por una de las ramas de la izquierda
--- (primera o segunda).
---
 -- | Flatten a Tree into lists of elements.
 --
 -- Any traversal that ends in a Stub is discarded.
@@ -178,12 +170,12 @@ pathsToLeaves i t = (pathsToLeaves' 500 i t)
         (_, v, []) ->
           [[v]]
 
-        -- Queremos que esto sea mas perezoso.
+        -- TODO: Make this lazier.
         (i', v, ts) ->
           let g :: Tree i a -> [[a]]
               g x = pathsToLeaves' (n - 1) i' x
 
-              -- -- Esto funciona pero tenemos que limpiarla y darle buenos nombres.
+              -- -- This works but we want to clean this and use better names.
               -- myfoldr xs []             = xs
               -- myfoldr xs ((Nothing):ys) = myfoldr xs ys
               -- myfoldr xs ((Just y):ys)  = concat [ xs, y, myfoldr [] ys]
@@ -282,7 +274,7 @@ instance (UnifyLocal' c1, UnifyLocal' c2) => UnifyLocal' (c1 :+: c2) where
 
 -- ** Occurrence of variables
 
--- | Esta clase captura la nocion de que una variable ocurre en una expression
+-- | Capture that notion that a variable occurs in an expression.
 class Occurs x where
   occurs :: Var -> x -> Bool
 
@@ -576,14 +568,12 @@ instance Arbitrary a => Arbitrary (Term a) where
 -- | PRE: Goal p ya ha unificado
 arbitraryP :: (MyArbitrary x, Logic x) => Term x -> Goal -> Gen (Term x)
 arbitraryP t p = do
-  -- Necesitamos una garantia de que la variable x no tiene ninguna otra
-  -- variable dentro que tenga constraints aplicadas a si misma (p.ej., a base
-  -- de resolver y expandir variables).
+  -- We need a guarantee that the variable x doesn't have any variable inside
+  -- with constraints applied to itself.
 
-  -- Hay que tener cuidado con randomize porque los predicados en nuestro
-  -- lenguaje tienen un orden especifico en la definicion. Cambiar el orden
-  -- de las ramas podria cambiar el significado. Parece importante que hayamos
-  -- hecho el unify primero.
+  -- We need to be careful because predicates in our language have specific
+  -- order. Changing the order of branches could change the meaning.
+  -- Seems important to have done unify first.
   x <- findAll' t <$> randomize p
   let xs = map myArbitrary x
   oneof xs
@@ -596,11 +586,10 @@ instance (MyArbitrary x, Arbitrary x) => MyArbitrary (Term x) where
   myArbitrary (Compound x) = Compound <$> myArbitrary x
 
 -- randomize = id
--- | PRE: Goal p ya ha unificado
+-- | PRE: Goal p already unified
 enumerateP :: Logic x => Term x -> Goal -> Gen (Term x)
 enumerateP t p = elements $ findAll' t p
 
--- findAll' es un findAll sin unificacion
 randomize :: Tree Int Constraint -> Gen (Tree Int Constraint)
 randomize = randomize' 0
 
@@ -616,6 +605,7 @@ randomize' c (Branch f) = do
   gs  <- mapM (randomize' c') as'
   return $ Branch (\i -> (i + diff, u, gs))
 
+-- findAll' is a findAll sin unificacion
 findAll' :: Logic a => Term a -> Goal -> [Term a]
 findAll' v p = allVals' v solutions
   where
@@ -641,31 +631,3 @@ findAll' v p = allVals' v solutions
       case testEquality (typeOf v) (typeOf x1) of
         Just Refl -> if v == x1 then Just x2 else Nothing
         Nothing   -> firstVal v xs
-
--- Nos quedamos aquí:
---
--- Si vamos a querer dar a los usuarios una forma de generar instancias
--- automaticas como hace Barbies. Y podemos hablar con el autor para que nos
--- ayude.
---
--- Tenemos que crear un fichero prolog ejecutable para comparar.
---
--- - [X] Generador de variables libres
--- - [X] Recursion
--- - [X] Unificacion para tipos especificos con variables dentro.
--- - [X] Unificacion para cualquier tipo con variables dentro.
--- - [X] Unificacion cuando las variables pueden ser de varios tipos. Considerar
---       la opcion de que las variables en si mismas tengan el tipo (o bien
---       en su propio tipo, o en tiempo de ejecucion).
--- - [X] Unificacion para tipos parametricos con variables dentro.
--- - [X] Listas.
--- - [X] Generador de instancias automatico.
---
--- - [X] Paper?
--- - [X] Negacion.
--- - [X] Grafos.
--- - [X] Mejor interfaz tanto de las respuestas como de los inputs.
--- - [ ] Mas ejemplos
--- - [ ] Aritmetica.
--- - [ ] Maquinas de estado.
--- - [ ] Conjuntos.
